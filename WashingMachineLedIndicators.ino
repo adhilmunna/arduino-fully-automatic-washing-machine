@@ -10,6 +10,8 @@
 Smoothed <float> pressureSensor;
 BMP180I2C bmp180(I2C_ADDRESS);
 
+char data = 0; 
+
 const int waterLevelButton = 16; //A1
 const int modeButton = 15; //A2
 const int startStopButton = 2;
@@ -40,13 +42,18 @@ int toggled=0;
 unsigned long buttonPressedAt=0;
 unsigned long buttonReleasedAt=0;
 
-int modeAccomplished = 0; unsigned long washModeStartTime = 0; unsigned long spinModeStartTime = 0; int washModeTimeLeft = 0; int spinModeTimeLeft = 0;
+int modeAccomplished = 0; unsigned long washModeStartTime = 0; unsigned long spinModeStartTime = 0; int washModeTimeLeft = 0; int spinModeTimeLeft = 0; 
+int totalTimeLeft = 0;  int totalProcessTime = 0;
 int WashCycleCount = 0; int completedWashCycleCount = 0; unsigned long WashCycleTime = 0;
 int SpinCycleCount = 0; int completedSpinCycleCount = 0; unsigned long SpinCycleTime = 0;
-int washModeStarted = 0; int spinModeStarted = 0;
+int washModeStarted = 0; int spinModeStarted = 0; 
+
+int isSoaking=0; int waitForSoakTime = 0; int currentSoakTime=0; int previousSoakTime=0; int soakTimeLeft = 0;
+
+int serialPrintTimerPrevious=0; int serialPrintTimerCurrent = 0;
 
 int WashNormalSpinState = 0; int WashRapidSpinState = 0; unsigned long MotorSpinStateChangeTime = 0; int drySpinState = 0;
-int WashNormalSpinTime = 6; int WashNormalStopTime = 1; int waitForSoakTime = 0;
+int WashNormalSpinTime = 6; int WashNormalStopTime = 1; 
 int WashRapidSpinTime = 750; int WashRapidStopTime = 375;
 
 float pSensorMaximum = 0;
@@ -93,6 +100,7 @@ int eepromValue11 = 0; //washModeStarted
 int eepromValue12 = 0; //spinModeStarted
 float eepromValue13 = 0; //pSensorMinimum
 int eepromValue14 = 0; //WashNormalSpinState
+int eepromValue15 = 0; //soakTimeLeft
 
 //int ledCurrentMillis = 0;
 //int ledpreviousMillis = 0;
@@ -125,23 +133,31 @@ void setup() {
   pinMode(mediumWaterLevelLed, OUTPUT);
   pinMode(fullWaterLevelLed, OUTPUT);
 
-  Serial.begin(9600);
+  Serial.begin(38400);
 
-  eepromValue1 = EEPROM.read(0); modeAccomplished = eepromValue1; Serial.print("modeAccomplished="); Serial.print(modeAccomplished); Serial.print("\n");
-  eepromValue2 = EEPROM.read(1); completedWashCycleCount = eepromValue2; Serial.print("completedWashCycleCount="); Serial.print(completedWashCycleCount); Serial.print("\n");
-  eepromValue3 = EEPROM.read(2); completedSpinCycleCount = eepromValue3; Serial.print("completedSpinCycleCount="); Serial.print(completedSpinCycleCount); Serial.print("\n");
-  eepromValue4 = EEPROM.read(3); interruptedCount = eepromValue4; Serial.print("play interruptedCount="); Serial.print(interruptedCount); Serial.print("\n");
-  eepromValue5 = EEPROM.read(4); mSelectorCount = eepromValue5; Serial.print("mSelectorCount="); Serial.print(mSelectorCount); Serial.print("\n");
-  eepromValue6 = EEPROM.read(5); wlSelectorCount = eepromValue6; Serial.print("wlSelectorCount="); Serial.print(wlSelectorCount); Serial.print("\n");
-  eepromValue7 = EEPROM.read(6); spinRequest = eepromValue7; Serial.print("spinRequest="); Serial.print(spinRequest); Serial.print("\n");
-  eepromValue8 = EEPROM.read(7); timer = eepromValue8 * 60; Serial.print("timer="); Serial.print(timer); Serial.print("\n");
-  eepromValue9 = EEPROM.read(8); washModeStartTime = eepromValue9 * 60; Serial.print("washModeStartTime="); Serial.print(washModeStartTime); Serial.print("\n");
-  eepromValue10 = EEPROM.read(9); spinModeStartTime = eepromValue10 * 60; Serial.print("spinModeStartTime="); Serial.print(spinModeStartTime); Serial.print("\n");
-  eepromValue11 = EEPROM.read(10); washModeStarted = eepromValue11; Serial.print("washModeStarted="); Serial.print(washModeStarted); Serial.print("\n");
-  eepromValue12 = EEPROM.read(11); spinModeStarted = eepromValue12; Serial.print("spinModeStarted="); Serial.print(spinModeStarted); Serial.print("\n");
-  eepromValue13 = EEPROM.read(12); pSensorMinimum = eepromValue13 * 400; Serial.print("pSensorMinimum="); Serial.print(pSensorMinimum); Serial.print("\n");
-  eepromValue14 = EEPROM.read(13); WashNormalSpinState = eepromValue14; Serial.print("WashNormalSpinState="); Serial.print(WashNormalSpinState); Serial.print("\n");
+  eepromValue1 = EEPROM.read(0); modeAccomplished = eepromValue1; //Serial.print("modeAccomplished="); Serial.print(modeAccomplished); Serial.print("\n");
+  eepromValue2 = EEPROM.read(1); completedWashCycleCount = eepromValue2; //Serial.print("completedWashCycleCount="); Serial.print(completedWashCycleCount); Serial.print("\n");
+  eepromValue3 = EEPROM.read(2); completedSpinCycleCount = eepromValue3; //Serial.print("completedSpinCycleCount="); Serial.print(completedSpinCycleCount); Serial.print("\n");
+  eepromValue4 = EEPROM.read(3); interruptedCount = eepromValue4; //Serial.print("play interruptedCount="); Serial.print(interruptedCount); Serial.print("\n");
+  eepromValue5 = EEPROM.read(4); mSelectorCount = eepromValue5; //Serial.print("mSelectorCount="); Serial.print(mSelectorCount); Serial.print("\n"); if (mSelectorCount > 2){mSelectorCount = 0;}
+  eepromValue6 = EEPROM.read(5); wlSelectorCount = eepromValue6; //Serial.print("wlSelectorCount="); Serial.print(wlSelectorCount); Serial.print("\n");  if (wlSelectorCount > 2){wlSelectorCount = 0;}
+  eepromValue7 = EEPROM.read(6); spinRequest = eepromValue7; //Serial.print("spinRequest="); Serial.print(spinRequest); Serial.print("\n");
+  eepromValue8 = EEPROM.read(7); timer = eepromValue8 * 60; //Serial.print("timer="); Serial.print(timer); Serial.print("\n");
+  eepromValue9 = EEPROM.read(8); washModeStartTime = eepromValue9 * 60; //Serial.print("washModeStartTime="); Serial.print(washModeStartTime); Serial.print("\n");
+  eepromValue10 = EEPROM.read(9); spinModeStartTime = eepromValue10 * 60; //Serial.print("spinModeStartTime="); Serial.print(spinModeStartTime); Serial.print("\n");
+  eepromValue11 = EEPROM.read(10); washModeStarted = eepromValue11; //Serial.print("washModeStarted="); Serial.print(washModeStarted); Serial.print("\n");
+  eepromValue12 = EEPROM.read(11); spinModeStarted = eepromValue12; //Serial.print("spinModeStarted="); Serial.print(spinModeStarted); Serial.print("\n");
+  eepromValue13 = EEPROM.read(12); pSensorMinimum = eepromValue13 * 400; //Serial.print("pSensorMinimum="); Serial.print(pSensorMinimum); Serial.print("\n");
+  eepromValue14 = EEPROM.read(13); WashNormalSpinState = eepromValue14; //Serial.print("WashNormalSpinState="); Serial.print(WashNormalSpinState); Serial.print("\n");
+  eepromValue15 = EEPROM.read(14); soakTimeLeft = eepromValue15*60; //Serial.print("soakTimeLeft="); Serial.print(soakTimeLeft); Serial.print("\n");
 
+    {
+    Serial.print("Paused"); Serial.print("|"); Serial.print(""); Serial.print("|");Serial.print(""); Serial.print("|");
+    Serial.print("Selected mode= "); Serial.print("|");Serial.print(""); Serial.print("|"); Serial.print("Wash count left= "); Serial.print("|");Serial.print(""); Serial.print("|");
+    Serial.print("Selected soak time= "); Serial.print("|");Serial.print(""); Serial.print("|"); Serial.print("Soak time left= "); Serial.print("|");Serial.print(""); Serial.print("|");
+    Serial.print("Selected water level="); Serial.print("|");Serial.print(""); Serial.print("|"); Serial.print("Current water level="); Serial.print("|");Serial.print(""); Serial.print("|");
+    Serial.print("CalibWLtimer = "); Serial.print("|"); Serial.print(""); Serial.print("|");
+    } 
   //BMP180 AND SMOOTHING
   { pressureSensor.begin(SMOOTHED_AVERAGE, 50);
     pressureSensor.clear();
@@ -164,13 +180,19 @@ void setup() {
 }
 
 void loop() {
+  //btSerialWrite();
+  btSerialRead();
+  
+  serialPrintTimerCurrent = millis();
+  if (serialPrintTimerCurrent-serialPrintTimerPrevious>=1000) {serialPrints();   Serial.print ("\n"); serialPrintTimerPrevious=serialPrintTimerCurrent;}
+  
   ssbPressed();
   executeSelection();
   timerFunction();
   eepromTimer();
   // pressureSensorRead();
-  Serial.print("play="); Serial.print(play); Serial.print("\t");
-  Serial.print ("\n");
+  
+
 }
 
 void executeSelection() {
@@ -178,13 +200,13 @@ void executeSelection() {
   if (play == 1)
   {
     if (mSelectorCount == 0) {
-      NormalMode(); //HeavyMode
+      NormalMode(); //Rinse
     }
     if (mSelectorCount == 1) {
-      HeavyMode(); //NormalMode
+      HeavyMode(); //Wash
     }
     if (mSelectorCount == 2) {
-      DryMode(); //QuickMode
+      DryMode(); //Spin
     }
   }
 
@@ -198,7 +220,7 @@ void executeSelection() {
     mSelector();
     //lcd.setCursor(0, 1);
     //lcd.print("Paused          ");
-    Serial.print("Paused"); Serial.print("\t");
+//    Serial.print("Paused"); Serial.print("\t");
   }
 
     {//led commands,
@@ -219,21 +241,126 @@ void executeSelection() {
 
     if (wlSelectorCount == 0)
     {
-      swl = 30; digitalWrite(lowWaterLevelLed, HIGH); digitalWrite(mediumWaterLevelLed, LOW); digitalWrite(fullWaterLevelLed, LOW);
+      swl = 25; digitalWrite(lowWaterLevelLed, HIGH); digitalWrite(mediumWaterLevelLed, LOW); digitalWrite(fullWaterLevelLed, LOW);
     }
 
     if (wlSelectorCount == 1)
     {
-      swl = 60; digitalWrite(lowWaterLevelLed, LOW); digitalWrite(mediumWaterLevelLed, HIGH); digitalWrite(fullWaterLevelLed, LOW);
+      swl = 50; digitalWrite(lowWaterLevelLed, LOW); digitalWrite(mediumWaterLevelLed, HIGH); digitalWrite(fullWaterLevelLed, LOW);
     }
     if (wlSelectorCount == 2)
     {
       swl = 95; digitalWrite(lowWaterLevelLed, LOW); digitalWrite(mediumWaterLevelLed, LOW); digitalWrite(fullWaterLevelLed, HIGH);
     }
+    if (wlSelectorCount == 3)
+    {
+      swl = 75; digitalWrite(lowWaterLevelLed, LOW); digitalWrite(mediumWaterLevelLed, LOW); digitalWrite(fullWaterLevelLed, HIGH);
+    }
+    
     }
 
 
 }
+
+//BLUETOOTH AND SERIAL
+void btSerialRead(){
+if(Serial.available() > 0)  
+{
+data = Serial.read();     
+               
+if(data == 'a') {  interruptedCount = 0; interruptedCount = interruptedCount + 1;}             
+else if(data == 'b') { interruptedCount = 1; interruptedCount = interruptedCount + 1;}  
+else if(data == 'r') { mSelectorCount = 0; resetValues();}  
+else if(data == 'w') { mSelectorCount = 1; resetValues();}     
+else if(data == 's') { mSelectorCount = 2; resetValues();}  
+//else if(data == 'f') { mSelectorCount = 2;}  
+else if(data == 'g') { waitForSoakTime=0;soakTimeLeft = waitForSoakTime;}   
+else if(data == 'h') { waitForSoakTime=120;soakTimeLeft = waitForSoakTime;}  
+else if(data == 'i') { waitForSoakTime=300;soakTimeLeft = waitForSoakTime;}  
+else if(data == 'j') { waitForSoakTime=600;soakTimeLeft = waitForSoakTime;}   
+else if(data == 'k') { waitForSoakTime=900;soakTimeLeft = waitForSoakTime;}  
+
+else if(data == 'l') { wlSelectorCount = 0;}  
+else if(data == 'm') { wlSelectorCount = 1;} 
+else if(data == 'n') { wlSelectorCount = 3;}  
+else if(data == 'o') { wlSelectorCount = 2;}  
+
+else if(data == 'p') { pressureSensorCalibrationBottom();}  
+else if(data == 'q') { pressureSensorCalibrationTop();}    
+}                            
+}
+
+void serialPrints(){
+
+  if (play == 0){
+    Serial.print("Paused"); Serial.print("|"); Serial.print(""); Serial.print("|");Serial.print(""); Serial.print("|");
+    Serial.print("Selected mode= "); Serial.print("|");Serial.print(""); Serial.print("|"); Serial.print("Wash count left= "); Serial.print("|");Serial.print(""); Serial.print("|");
+    Serial.print("Selected soak time= "); Serial.print("|");Serial.print(""); Serial.print("|"); Serial.print("Soak time left= "); Serial.print("|");Serial.print(""); Serial.print("|");
+    Serial.print("Selected water level="); Serial.print("|");Serial.print(""); Serial.print("|"); Serial.print("Current water level="); Serial.print("|");Serial.print(""); Serial.print("|");
+    Serial.print("CalibWLtimer = "); Serial.print("|"); Serial.print(""); Serial.print("|");
+    } 
+    
+  if (play == 1)
+    {
+      //Status//
+      Serial.print("Playing"); Serial.print("|");
+      
+      //Process//
+      if (spinRequest == 0 && ignoreWaterLevel == 0) {Serial.print("Filling Water");Serial.print("|"); }
+      if (spinRequest == 0 && ignoreWaterLevel == 1) {if (isSoaking == 1) {Serial.print("Soaking");Serial.print("|"); }if (isSoaking == 0) {Serial.print("Washing"); Serial.print("|");}}
+      if (spinRequest == 1 && ignoreWaterLevel == 0) {Serial.print("Draining");Serial.print("|"); }
+      if (spinRequest == 1 && ignoreWaterLevel == 1) {Serial.print("Spinning"); Serial.print("|");}
+
+      //Time left
+      Serial.print(washModeTimeLeft+spinModeTimeLeft+soakTimeLeft); Serial.print("|"); 
+      
+      //Mode//
+      if (mSelectorCount == 0) {Serial.print("Selected mode= "); Serial.print("|"); Serial.print("Rinse"); Serial.print("|"); }
+      if (mSelectorCount == 1) {Serial.print("Selected mode= "); Serial.print("|"); Serial.print("Wash"); Serial.print("|");}
+      if (mSelectorCount == 2) {Serial.print("Selected mode= "); Serial.print("|"); Serial.print("Spin"); Serial.print("|");}
+      
+      //Wash count left//
+      Serial.print("Cycles left= "); Serial.print("|"); Serial.print(WashCycleCount - completedWashCycleCount); Serial.print("|");
+      
+      //selected soak time//
+      Serial.print("Selected soak time= "); Serial.print("|"); Serial.print(waitForSoakTime); Serial.print("|");
+      
+      //soak time left//
+      Serial.print("Soak time left= "); Serial.print("|"); Serial.print(soakTimeLeft); Serial.print("|");
+      
+      //Selected water level//
+      Serial.print("Selected water level="); Serial.print("|"); Serial.print(requiredWaterLevel); Serial.print("|");
+      
+      //Current water level//
+      Serial.print("Current water level="); Serial.print("|"); Serial.print(actualWaterLevel); Serial.print("|");
+
+      //Calib Timer//
+      Serial.print("CalibWLtimer = "); Serial.print("|"); Serial.print(CalibWLtimer); Serial.print("|");
+            
+//Timer
+        //     Serial.print("Timer = " ); Serial.print(timer); Serial.print("\t" );
+        
+        //pressureSensorRead
+        //    Serial.print("Psr="); //Serial.print(currentSensorValue); //Serial.print("\t=");
+        //    Serial.print("Pss="); Serial.print(smoothedSensorValueAvg); Serial.print("\t=");
+        //    Serial.print("Pssm="); Serial.print(actualWaterLevel); Serial.print("\t");
+        
+        //WaterLevelMonitor
+//              Serial.print("wlSelectorCount="); Serial.print(wlSelectorCount); Serial.print("\t");
+//              Serial.print("swl="); Serial.print(swl); Serial.print("\t"); 
+//              Serial.print("CalibWLtimer="); Serial.print(CalibWLtimer); Serial.print("\t");
+        //    Serial.print("currentActualWaterLevel="); Serial.print(currentActualWaterLevel); Serial.print("\t");
+        //    Serial.print("previousActualWaterLevel="); Serial.print(previousActualWaterLevel); Serial.print("\t");
+        
+        //Running process
+  //            Serial.print("WashModeTimeLeft="); Serial.print(washModeTimeLeft); Serial.print("\t");
+//              Serial.print("spinModeTimeLeft="); Serial.print(spinModeTimeLeft); Serial.print("\t");
+
+    }
+           
+}
+
+
 
 //EEPROM Activities
 void eepromTimer() {
@@ -248,7 +375,7 @@ void eepromWrite() {
 
   if (modeAccomplished == 0)
   {
-    //Serial.print("writing to eeprom\t"); //Serial.print(eepromTime); //Serial.print("\t");
+    serialPrints(); Serial.print("writing to eeprom\n"); //Serial.print(eepromTime); //Serial.print("\t");
     EEPROM.write(0, modeAccomplished);
     EEPROM.write(1, completedWashCycleCount);
     EEPROM.write(2, completedSpinCycleCount);
@@ -263,23 +390,25 @@ void eepromWrite() {
     EEPROM.write(11, spinModeStarted);
     EEPROM.write(12, pSensorMinimum / 400);
     EEPROM.write(13, WashNormalSpinState);
+    EEPROM.write(14, soakTimeLeft/60);
 
     //Serial.print("timer to eeprom="); //Serial.print(timer / 10); //Serial.print("\n");
 
-  eepromValue1 = EEPROM.read(0); modeAccomplished = eepromValue1; Serial.print("modeAccomplished="); Serial.print(modeAccomplished); Serial.print("\n");
-  eepromValue2 = EEPROM.read(1); completedWashCycleCount = eepromValue2; Serial.print("completedWashCycleCount="); Serial.print(completedWashCycleCount); Serial.print("\n");
-  eepromValue3 = EEPROM.read(2); completedSpinCycleCount = eepromValue3; Serial.print("completedSpinCycleCount="); Serial.print(completedSpinCycleCount); Serial.print("\n");
-  eepromValue4 = EEPROM.read(3); interruptedCount = eepromValue4; Serial.print("play interruptedCount="); Serial.print(interruptedCount); Serial.print("\n");
-  eepromValue5 = EEPROM.read(4); mSelectorCount = eepromValue5; Serial.print("mSelectorCount="); Serial.print(mSelectorCount); Serial.print("\n");
-  eepromValue6 = EEPROM.read(5); wlSelectorCount = eepromValue6; Serial.print("wlSelectorCount="); Serial.print(wlSelectorCount); Serial.print("\n");
-  eepromValue7 = EEPROM.read(6); spinRequest = eepromValue7; Serial.print("spinRequest="); Serial.print(spinRequest); Serial.print("\n");
-  eepromValue8 = EEPROM.read(7); timer = eepromValue8 * 60; Serial.print("timer="); Serial.print(timer); Serial.print("\n");
-  eepromValue9 = EEPROM.read(8); washModeStartTime = eepromValue9 * 60; Serial.print("washModeStartTime="); Serial.print(washModeStartTime); Serial.print("\n");
-  eepromValue10 = EEPROM.read(9); spinModeStartTime = eepromValue10 * 60; Serial.print("spinModeStartTime="); Serial.print(spinModeStartTime); Serial.print("\n");
-  eepromValue11 = EEPROM.read(10); washModeStarted = eepromValue11; Serial.print("washModeStarted="); Serial.print(washModeStarted); Serial.print("\n");
-  eepromValue12 = EEPROM.read(11); spinModeStarted = eepromValue12; Serial.print("spinModeStarted="); Serial.print(spinModeStarted); Serial.print("\n");
-  eepromValue13 = EEPROM.read(12); pSensorMinimum = eepromValue13 * 400; Serial.print("pSensorMinimum="); Serial.print(pSensorMinimum); Serial.print("\n");
-  eepromValue14 = EEPROM.read(13); WashNormalSpinState = eepromValue14; Serial.print("WashNormalSpinState="); Serial.print(WashNormalSpinState); Serial.print("\n");
+  eepromValue1 = EEPROM.read(0); modeAccomplished = eepromValue1; //Serial.print("modeAccomplished="); Serial.print(modeAccomplished); Serial.print("\n");
+  eepromValue2 = EEPROM.read(1); completedWashCycleCount = eepromValue2; //Serial.print("completedWashCycleCount="); Serial.print(completedWashCycleCount); Serial.print("\n");
+  eepromValue3 = EEPROM.read(2); completedSpinCycleCount = eepromValue3; //Serial.print("completedSpinCycleCount="); Serial.print(completedSpinCycleCount); Serial.print("\n");
+  eepromValue4 = EEPROM.read(3); interruptedCount = eepromValue4; //Serial.print("play interruptedCount="); Serial.print(interruptedCount); Serial.print("\n");
+  eepromValue5 = EEPROM.read(4); mSelectorCount = eepromValue5; //Serial.print("mSelectorCount="); Serial.print(mSelectorCount); Serial.print("\n");
+  eepromValue6 = EEPROM.read(5); wlSelectorCount = eepromValue6; //Serial.print("wlSelectorCount="); Serial.print(wlSelectorCount); Serial.print("\n");
+  eepromValue7 = EEPROM.read(6); spinRequest = eepromValue7; //Serial.print("spinRequest="); Serial.print(spinRequest); Serial.print("\n");
+  eepromValue8 = EEPROM.read(7); timer = eepromValue8 * 60; //Serial.print("timer="); Serial.print(timer); Serial.print("\n");
+  eepromValue9 = EEPROM.read(8); washModeStartTime = eepromValue9 * 60; //Serial.print("washModeStartTime="); Serial.print(washModeStartTime); Serial.print("\n");
+  eepromValue10 = EEPROM.read(9); spinModeStartTime = eepromValue10 * 60; //Serial.print("spinModeStartTime="); Serial.print(spinModeStartTime); Serial.print("\n");
+  eepromValue11 = EEPROM.read(10); washModeStarted = eepromValue11; //Serial.print("washModeStarted="); Serial.print(washModeStarted); Serial.print("\n");
+  eepromValue12 = EEPROM.read(11); spinModeStarted = eepromValue12; //Serial.print("spinModeStarted="); Serial.print(spinModeStarted); Serial.print("\n");
+  eepromValue13 = EEPROM.read(12); pSensorMinimum = eepromValue13 * 400; //Serial.print("pSensorMinimum="); Serial.print(pSensorMinimum); Serial.print("\n");
+  eepromValue14 = EEPROM.read(13); WashNormalSpinState = eepromValue14; //Serial.print("WashNormalSpinState="); Serial.print(WashNormalSpinState); Serial.print("\n");
+  eepromValue15 = EEPROM.read(14); soakTimeLeft = eepromValue15*60; //Serial.print("soakTimeLeft="); Serial.print(soakTimeLeft); Serial.print("\n");
   }
 
   if (modeAccomplished == 1)
@@ -297,6 +426,7 @@ void eepromWrite() {
     EEPROM.write(10, 0);
     EEPROM.write(11, 0);
     EEPROM.write(13, 0);
+    EEPROM.write(14, waitForSoakTime/60);
     //Serial.print("mode accomplished"); //Serial.print ("\t");
 
     digitalWrite(normalModeLed, HIGH);  digitalWrite(heavyModeLed, HIGH);  digitalWrite(dryModeLed, HIGH);
@@ -329,6 +459,54 @@ void eepromWrite() {
 
 }
 
+void resetValues(){
+      timer = 0;
+      completedWashCycleCount = 0;
+      completedSpinCycleCount = 0;
+      spinRequest = 0;
+      washModeStartTime = 0;
+      spinModeStartTime = 0;
+      washModeTimeLeft = 0;
+      spinModeTimeLeft = 0;
+      washModeStarted = 0;
+      spinModeStarted = 0;
+      ignoreWaterLevel = 0;
+      WashNormalSpinState = 0;
+      waitForSoakTime=0;
+      soakTimeLeft = waitForSoakTime;
+      modeAccomplished = 0;
+
+      EEPROM.write(0, 0);
+      EEPROM.write(1, 0);
+      EEPROM.write(2, 0);
+      EEPROM.write(3, 0);
+      EEPROM.write(4, mSelectorCount);
+      EEPROM.write(5, wlSelectorCount);
+      EEPROM.write(6, 0);
+      EEPROM.write(7, 0);
+      EEPROM.write(8, 0);
+      EEPROM.write(9, 0);
+      EEPROM.write(10, 0);
+      EEPROM.write(11, 0);
+      EEPROM.write(12, 0);
+      EEPROM.write(13, WashNormalSpinState);
+      EEPROM.write(14, soakTimeLeft/60);
+      eepromValue1 = EEPROM.read(0); modeAccomplished = eepromValue1; //Serial.print("modeAccomplished="); Serial.print(modeAccomplished); Serial.print("\n");
+      eepromValue2 = EEPROM.read(1); completedWashCycleCount = eepromValue2; //Serial.print("completedWashCycleCount="); Serial.print(completedWashCycleCount); Serial.print("\n");
+      eepromValue3 = EEPROM.read(2); completedSpinCycleCount = eepromValue3; //Serial.print("completedSpinCycleCount="); Serial.print(completedSpinCycleCount); Serial.print("\n");
+      eepromValue4 = EEPROM.read(3); interruptedCount = eepromValue4; //Serial.print("play interruptedCount="); Serial.print(interruptedCount); Serial.print("\n");
+      eepromValue5 = EEPROM.read(4); mSelectorCount = eepromValue5; //Serial.print("mSelectorCount="); Serial.print(mSelectorCount); Serial.print("\n");
+      eepromValue6 = EEPROM.read(5); wlSelectorCount = eepromValue6; //Serial.print("wlSelectorCount="); Serial.print(wlSelectorCount); Serial.print("\n");
+      eepromValue7 = EEPROM.read(6); spinRequest = eepromValue7; //Serial.print("spinRequest="); Serial.print(spinRequest); Serial.print("\n");
+      eepromValue8 = EEPROM.read(7); timer = eepromValue8 * 60; //Serial.print("timer="); Serial.print(timer); Serial.print("\n");
+      eepromValue9 = EEPROM.read(8); washModeStartTime = eepromValue9 * 60; //Serial.print("washModeStartTime="); Serial.print(washModeStartTime); Serial.print("\n");
+      eepromValue10 = EEPROM.read(9); spinModeStartTime = eepromValue10 * 60; //Serial.print("spinModeStartTime="); Serial.print(spinModeStartTime); Serial.print("\n");
+      eepromValue11 = EEPROM.read(10); washModeStarted = eepromValue11; //Serial.print("washModeStarted="); Serial.print(washModeStarted); Serial.print("\n");
+      eepromValue12 = EEPROM.read(11); spinModeStarted = eepromValue12; //Serial.print("spinModeStarted="); Serial.print(spinModeStarted); Serial.print("\n");
+      eepromValue13 = EEPROM.read(12); pSensorMinimum = eepromValue13 * 400; //Serial.print("pSensorMinimum="); Serial.print(pSensorMinimum); Serial.print("\n");
+      eepromValue14 = EEPROM.read(13); WashNormalSpinState = WashNormalSpinState; //Serial.print("WashNormalSpinState="); Serial.print(WashNormalSpinState); Serial.print("\n");
+      eepromValue15 = EEPROM.read(14); soakTimeLeft = eepromValue15*60; //Serial.print("soakTimeLeft="); Serial.print(soakTimeLeft); Serial.print("\n");
+}
 
 //Timer
 void timerFunction() {
@@ -385,16 +563,18 @@ void timerFunction() {
   }
 }
 
+void totalTimerFunction() {
+ totalProcessTime =  WashCycleCount * (WashCycleTime + SpinCycleTime);
+ totalTimeLeft = 0;
+}
+
 
 //Selection and display
 void wlSelector() {
   wlb = digitalRead(waterLevelButton);     
   wlb = !wlb;
 
-  if (wlSelectorCount > 2)
-    {
-      wlSelectorCount = 0;
-    }
+
 
   if (wlb == 0)
     {
@@ -405,35 +585,46 @@ void wlSelector() {
         if ( (buttonPressedDuration > debounceDelay) && (buttonPressedDuration < 5000) && (toggled==0))
         {
 
-            Serial.print("pressed"); Serial.print("\t");
-            Serial.print(wlSelectorCount); Serial.print("\t");
+            //Serial.print("pressed"); Serial.print("\n");
+           // Serial.print(wlSelectorCount); Serial.print("\n");
             wlSelectorCount = wlSelectorCount + 1;
+              if (wlSelectorCount > 2)
+                {
+                  wlSelectorCount = 0;
+                }
             ignoreWaterLevel = 0;
             EEPROM.write(5, wlSelectorCount);  
             toggled=1;
             
-            eepromValue1 = EEPROM.read(0); modeAccomplished = eepromValue1; Serial.print("modeAccomplished="); Serial.print(modeAccomplished); Serial.print("\n");
-            eepromValue2 = EEPROM.read(1); completedWashCycleCount = eepromValue2; Serial.print("completedWashCycleCount="); Serial.print(completedWashCycleCount); Serial.print("\n");
-            eepromValue3 = EEPROM.read(2); completedSpinCycleCount = eepromValue3; Serial.print("completedSpinCycleCount="); Serial.print(completedSpinCycleCount); Serial.print("\n");
-            eepromValue4 = EEPROM.read(3); interruptedCount = eepromValue4; Serial.print("play interruptedCount="); Serial.print(interruptedCount); Serial.print("\n");
-            eepromValue5 = EEPROM.read(4); mSelectorCount = eepromValue5; Serial.print("mSelectorCount="); Serial.print(mSelectorCount); Serial.print("\n");
-            eepromValue6 = EEPROM.read(5); wlSelectorCount = eepromValue6; Serial.print("wlSelectorCount="); Serial.print(wlSelectorCount); Serial.print("\n");
-            eepromValue7 = EEPROM.read(6); spinRequest = eepromValue7; Serial.print("spinRequest="); Serial.print(spinRequest); Serial.print("\n");
-            eepromValue8 = EEPROM.read(7); timer = eepromValue8 * 60; Serial.print("timer="); Serial.print(timer); Serial.print("\n");
-            eepromValue9 = EEPROM.read(8); washModeStartTime = eepromValue9 * 60; Serial.print("washModeStartTime="); Serial.print(washModeStartTime); Serial.print("\n");
-            eepromValue10 = EEPROM.read(9); spinModeStartTime = eepromValue10 * 60; Serial.print("spinModeStartTime="); Serial.print(spinModeStartTime); Serial.print("\n");
-            eepromValue11 = EEPROM.read(10); washModeStarted = eepromValue11; Serial.print("washModeStarted="); Serial.print(washModeStarted); Serial.print("\n");
-            eepromValue12 = EEPROM.read(11); spinModeStarted = eepromValue12; Serial.print("spinModeStarted="); Serial.print(spinModeStarted); Serial.print("\n");
-            eepromValue13 = EEPROM.read(12); pSensorMinimum = eepromValue13 * 400; Serial.print("pSensorMinimum="); Serial.print(pSensorMinimum); Serial.print("\n");
-            eepromValue14 = EEPROM.read(13); WashNormalSpinState = WashNormalSpinState; Serial.print("WashNormalSpinState="); Serial.print(WashNormalSpinState); Serial.print("\n");
+            eepromValue1 = EEPROM.read(0); modeAccomplished = eepromValue1; //Serial.print("modeAccomplished="); Serial.print(modeAccomplished); Serial.print("\n");
+            eepromValue2 = EEPROM.read(1); completedWashCycleCount = eepromValue2; //Serial.print("completedWashCycleCount="); Serial.print(completedWashCycleCount); Serial.print("\n");
+            eepromValue3 = EEPROM.read(2); completedSpinCycleCount = eepromValue3; //Serial.print("completedSpinCycleCount="); Serial.print(completedSpinCycleCount); Serial.print("\n");
+            eepromValue4 = EEPROM.read(3); interruptedCount = eepromValue4; //Serial.print("play interruptedCount="); Serial.print(interruptedCount); Serial.print("\n");
+            eepromValue5 = EEPROM.read(4); mSelectorCount = eepromValue5; //Serial.print("mSelectorCount="); Serial.print(mSelectorCount); Serial.print("\n");
+            eepromValue6 = EEPROM.read(5); wlSelectorCount = eepromValue6; //Serial.print("wlSelectorCount="); Serial.print(wlSelectorCount); Serial.print("\n");
+            eepromValue7 = EEPROM.read(6); spinRequest = eepromValue7; //Serial.print("spinRequest="); Serial.print(spinRequest); Serial.print("\n");
+            eepromValue8 = EEPROM.read(7); timer = eepromValue8 * 60; //Serial.print("timer="); Serial.print(timer); Serial.print("\n");
+            eepromValue9 = EEPROM.read(8); washModeStartTime = eepromValue9 * 60; //Serial.print("washModeStartTime="); Serial.print(washModeStartTime); Serial.print("\n");
+            eepromValue10 = EEPROM.read(9); spinModeStartTime = eepromValue10 * 60; //Serial.print("spinModeStartTime="); Serial.print(spinModeStartTime); Serial.print("\n");
+            eepromValue11 = EEPROM.read(10); washModeStarted = eepromValue11; //Serial.print("washModeStarted="); Serial.print(washModeStarted); Serial.print("\n");
+            eepromValue12 = EEPROM.read(11); spinModeStarted = eepromValue12; //Serial.print("spinModeStarted="); Serial.print(spinModeStarted); Serial.print("\n");
+            eepromValue13 = EEPROM.read(12); pSensorMinimum = eepromValue13 * 400; //Serial.print("pSensorMinimum="); Serial.print(pSensorMinimum); Serial.print("\n");
+            eepromValue14 = EEPROM.read(13); WashNormalSpinState = WashNormalSpinState; //Serial.print("WashNormalSpinState="); Serial.print(WashNormalSpinState); Serial.print("\n");
             
             buttonPressedDuration = 0;
         }
 
-        if (buttonPressedDuration > 5000)
+        if (buttonPressedDuration > 5000 && buttonPressedDuration < 10000 )
         {
-          Serial.println ("Calibrated");
+          serialPrints(); Serial.println ("Calibrated");
           pressureSensorCalibrationBottom();
+          buttonPressedDuration = 0;
+        }  
+
+                if (buttonPressedDuration > 10000)
+        {
+          serialPrints(); Serial.println ("Calibrated");
+          pressureSensorCalibrationTop();
           buttonPressedDuration = 0;
         }  
     }
@@ -446,7 +637,6 @@ void wlSelector() {
 
 }
  
-
 void mSelector() {
 
   mb = digitalRead(modeButton);   
@@ -473,77 +663,17 @@ void mSelector() {
       {
        // Serial.print ("Pressed"); Serial.print ("\t");
         mSelectorCount = mSelectorCount + 1;
+        if (mSelectorCount > 2)
+        {
+          mSelectorCount = 0;
+        }
       }
 
-      timer = 0;
-      completedWashCycleCount = 0;
-      completedSpinCycleCount = 0;
-      spinRequest = 0;
-      washModeStartTime = 0;
-      spinModeStartTime = 0;
-      washModeTimeLeft = 0;
-      spinModeTimeLeft = 0;
-      washModeStarted = 0;
-      spinModeStarted = 0;
-      ignoreWaterLevel = 0;
-      WashNormalSpinState = 0;
-
-      modeAccomplished = 0;
-
-      EEPROM.write(0, 0);
-      EEPROM.write(1, 0);
-      EEPROM.write(2, 0);
-      EEPROM.write(3, 0);
-      EEPROM.write(4, mSelectorCount);
-      EEPROM.write(5, wlSelectorCount);
-      EEPROM.write(6, 0);
-      EEPROM.write(7, 0);
-      EEPROM.write(8, 0);
-      EEPROM.write(9, 0);
-      EEPROM.write(10, 0);
-      EEPROM.write(11, 0);
-      EEPROM.write(13, WashNormalSpinState);
-
-      eepromValue1 = EEPROM.read(0); modeAccomplished = eepromValue1; Serial.print("modeAccomplished="); Serial.print(modeAccomplished); Serial.print("\n");
-      eepromValue2 = EEPROM.read(1); completedWashCycleCount = eepromValue2; Serial.print("completedWashCycleCount="); Serial.print(completedWashCycleCount); Serial.print("\n");
-      eepromValue3 = EEPROM.read(2); completedSpinCycleCount = eepromValue3; Serial.print("completedSpinCycleCount="); Serial.print(completedSpinCycleCount); Serial.print("\n");
-      eepromValue4 = EEPROM.read(3); interruptedCount = eepromValue4; Serial.print("play interruptedCount="); Serial.print(interruptedCount); Serial.print("\n");
-      eepromValue5 = EEPROM.read(4); mSelectorCount = eepromValue5; Serial.print("mSelectorCount="); Serial.print(mSelectorCount); Serial.print("\n");
-      eepromValue6 = EEPROM.read(5); wlSelectorCount = eepromValue6; Serial.print("wlSelectorCount="); Serial.print(wlSelectorCount); Serial.print("\n");
-      eepromValue7 = EEPROM.read(6); spinRequest = eepromValue7; Serial.print("spinRequest="); Serial.print(spinRequest); Serial.print("\n");
-      eepromValue8 = EEPROM.read(7); timer = eepromValue8 * 60; Serial.print("timer="); Serial.print(timer); Serial.print("\n");
-      eepromValue9 = EEPROM.read(8); washModeStartTime = eepromValue9 * 60; Serial.print("washModeStartTime="); Serial.print(washModeStartTime); Serial.print("\n");
-      eepromValue10 = EEPROM.read(9); spinModeStartTime = eepromValue10 * 60; Serial.print("spinModeStartTime="); Serial.print(spinModeStartTime); Serial.print("\n");
-      eepromValue11 = EEPROM.read(10); washModeStarted = eepromValue11; Serial.print("washModeStarted="); Serial.print(washModeStarted); Serial.print("\n");
-      eepromValue12 = EEPROM.read(11); spinModeStarted = eepromValue12; Serial.print("spinModeStarted="); Serial.print(spinModeStarted); Serial.print("\n");
-      eepromValue13 = EEPROM.read(12); pSensorMinimum = eepromValue13 * 400; Serial.print("pSensorMinimum="); Serial.print(pSensorMinimum); Serial.print("\n");
-      eepromValue14 = EEPROM.read(13); WashNormalSpinState = WashNormalSpinState; Serial.print("WashNormalSpinState="); Serial.print(WashNormalSpinState); Serial.print("\n");
+      resetValues();
     }
   }
 
-  if (mSelectorCount == 0)
-  {
-    //Serial.print(mSelectorCount);
-    smode = 0;
-  }
-  if (mSelectorCount == 1)
-  {
-    //Serial.print(mSelectorCount);
-    smode = 1;
-  }
 
-  if (mSelectorCount == 2)
-  {
-    //Serial.print(mSelectorCount);
-    smode = 2;
-  }
-
-  if (mSelectorCount == 3)
-  {
-    mSelectorCount = 0;
-    //Serial.print(mSelectorCount);
-    smode = 0;
-  }
 
   pmbState = mb;
 }
@@ -578,7 +708,7 @@ void ssbPressed() {
           {
             play = 0;
             EEPROM.write(3, interruptedCount);
-            eepromValue4 = EEPROM.read(3); interruptedCount = eepromValue4; Serial.print("play interruptedCount="); Serial.print(interruptedCount); Serial.print("\n");
+            eepromValue4 = EEPROM.read(3); interruptedCount = eepromValue4; //Serial.print("play interruptedCount="); Serial.print(interruptedCount); Serial.print("\n");
 
           }
         
@@ -586,7 +716,7 @@ void ssbPressed() {
           {
             play = 1;
             EEPROM.write(3, interruptedCount);
-            eepromValue4 = EEPROM.read(3); interruptedCount = eepromValue4; Serial.print("play interruptedCount="); Serial.print(interruptedCount); Serial.print("\n");
+            eepromValue4 = EEPROM.read(3); interruptedCount = eepromValue4; //Serial.print("play interruptedCount="); Serial.print(interruptedCount); Serial.print("\n");
           }
           
           if (interruptedCount > 1)
@@ -594,7 +724,7 @@ void ssbPressed() {
             interruptedCount = 0;
             play = 0;
             EEPROM.write(3, interruptedCount);
-            eepromValue4 = EEPROM.read(3); interruptedCount = eepromValue4; Serial.print("play interruptedCount="); Serial.print(interruptedCount); Serial.print("\n");
+            eepromValue4 = EEPROM.read(3); interruptedCount = eepromValue4; //Serial.print("play interruptedCount="); Serial.print(interruptedCount); Serial.print("\n");
           }
       }
     }
@@ -619,14 +749,11 @@ void ssbPressed() {
 }
 
 
-
-
-
 //Water level activity
 void pressureSensorRead() {
   if (!bmp180.measurePressure())
   {
-    Serial.print("could not start perssure measurement, is a measurement already running?");
+    serialPrints(); Serial.println("could not start perssure measurement, is a measurement already running?");
     return;
   }
   do
@@ -648,10 +775,10 @@ void pressureSensorRead() {
 }
 
 void pressureSensorCalibrationBottom() {
-  Serial.println("Running pressure sensor calibration");
+  serialPrints(); Serial.println("Running pressure sensor calibration");
   if (!bmp180.measurePressure())
   {
-    Serial.print("could not start perssure measurement, is a measurement already running?");
+    serialPrints(); Serial.println("could not start perssure measurement, is a measurement already running?");
     return;
   }
   do
@@ -666,7 +793,7 @@ void pressureSensorCalibrationBottom() {
   float lastValueStoredAvg = pressureSensor.getLast();
   actualWaterLevel = smoothedSensorValueAvg;
   pSensorMinimum = smoothedSensorValueAvg;
-  Serial.print("New pSensorMinimum = "); Serial.print(pSensorMinimum); Serial.println("");
+  serialPrints(); Serial.print("New pSensorMinimum = "); Serial.print(pSensorMinimum); Serial.println("");
   EEPROM.write(12, pSensorMinimum / 400);
   CalibWLtimer = 0;
   CalibWLpreviousTime =0; 
@@ -677,10 +804,10 @@ void pressureSensorCalibrationBottom() {
 }
 
 void pressureSensorCalibrationTop() {
-  Serial.println("Running pressure sensor calibration");
+  serialPrints(); Serial.println("Running pressure sensor calibration");
   if (!bmp180.measurePressure())
   {
-    Serial.print("could not start perssure measurement, is a measurement already running?");
+    serialPrints(); Serial.println("could not start perssure measurement, is a measurement already running?");
     return;
   }
   do
@@ -695,7 +822,7 @@ void pressureSensorCalibrationTop() {
   float lastValueStoredAvg = pressureSensor.getLast();
   actualWaterLevel = smoothedSensorValueAvg;
   pSensorMinimum = (smoothedSensorValueAvg-3400);
-  Serial.print("New pSensorMinimum = "); Serial.print(pSensorMinimum); Serial.println("");
+  serialPrints(); Serial.print("New pSensorMinimum = "); Serial.print(pSensorMinimum); Serial.println("");
   EEPROM.write(12, pSensorMinimum / 400);
   CalibWLtimer = 0;
   CalibWLpreviousTime =0; 
@@ -710,13 +837,14 @@ void washWaterLevelMonitor() {
   requiredWaterLevel = swl;
   pressureSensorRead();
   currentActualWaterLevel = actualWaterLevel;
-  eepromValue6 = EEPROM.read(5); wlSelectorCount = eepromValue6; Serial.print("wlSelectorCount="); Serial.print(wlSelectorCount); Serial.print("\t");
+  eepromValue6 = EEPROM.read(5); wlSelectorCount = eepromValue6; 
+//  Serial.print("wlSelectorCount="); Serial.print(wlSelectorCount); Serial.print("\t");
 //  Serial.print("swl="); Serial.print(swl); Serial.print("\t");
-  Serial.print("requiredWaterLevel="); Serial.print(requiredWaterLevel); Serial.print("\t");
-  Serial.print("actualWaterLevel="); Serial.print(actualWaterLevel); Serial.print("\t");
-
-//  Serial.print("currentActualWaterLevel="); Serial.print(currentActualWaterLevel); Serial.print("\t");
-//  Serial.print("previousActualWaterLevel="); Serial.print(previousActualWaterLevel); Serial.print("\t");
+//  Serial.print("requiredWaterLevel="); Serial.print(requiredWaterLevel); Serial.print("\t");
+//  Serial.print("actualWaterLevel="); Serial.print(actualWaterLevel); Serial.print("\t");
+//
+////  Serial.print("currentActualWaterLevel="); Serial.print(currentActualWaterLevel); Serial.print("\t");
+////  Serial.print("previousActualWaterLevel="); Serial.print(previousActualWaterLevel); Serial.print("\t");
 
   if (ignoreWaterLevel == 0)
   {
@@ -726,7 +854,7 @@ void washWaterLevelMonitor() {
       drainValveOff();
       waterValveOn(); //Turn on water valve
       washWaterLevelRequirementMet = 0; //water level requirement is not met
-      Serial.print("Filling water\t");
+//      Serial.print("Filling water\t");
       //lcd.setCursor(0, 1);
       //lcd.print("Filling      ");
     }
@@ -746,7 +874,7 @@ void washWaterLevelMonitor() {
         waterValveOff(); //Turn off water valve
         washWaterLevelRequirementMet = 1; //water level requirement is met
         ignoreWaterLevel = 1;
-        Serial.print("Filled water\t");
+        serialPrints(); Serial.println("Filled water\t");
         //lcd.setCursor(0, 1);
         //lcd.print("Filled      ");
       }
@@ -764,11 +892,10 @@ void washWaterLevelMonitor() {
       {
         CalibWLtimer = CalibWLtimer + 1;
         CalibWLpreviousTime = CalibWLcurrentTime;
-        Serial.print("CalibWLtimer = "); Serial.print(CalibWLtimer); Serial.print("\t");
       }
      }
      
-      if (CalibWLtimer >= 60)
+      if (CalibWLtimer >= 30)
       {
          pressureSensorCalibrationTop(); 
       }
@@ -782,12 +909,12 @@ void spinWaterLevelMonitor() {
   requiredWaterLevel = 5;
   pressureSensorRead();
   currentActualWaterLevel = actualWaterLevel;
-  Serial.print("requiredWaterLevel="); Serial.print(requiredWaterLevel); Serial.print("\t");
-  Serial.print("actualWaterLevel="); Serial.print(actualWaterLevel); Serial.print("\t");
-
-//  Serial.print("currentActualWaterLevel="); Serial.print(currentActualWaterLevel); Serial.print("\t");
-//  Serial.print("previousActualWaterLevel="); Serial.print(previousActualWaterLevel); Serial.print("\t");
-  Serial.print("CalibWLtimer="); Serial.print(CalibWLtimer); Serial.print("\t");
+//  Serial.print("requiredWaterLevel="); Serial.print(requiredWaterLevel); Serial.print("\t");
+//  Serial.print("actualWaterLevel="); Serial.print(actualWaterLevel); Serial.print("\t");
+//
+////  Serial.print("currentActualWaterLevel="); Serial.print(currentActualWaterLevel); Serial.print("\t");
+////  Serial.print("previousActualWaterLevel="); Serial.print(previousActualWaterLevel); Serial.print("\t");
+//  Serial.print("CalibWLtimer="); Serial.print(CalibWLtimer); Serial.print("\t");
 
   if (ignoreWaterLevel == 0)
   {
@@ -797,7 +924,7 @@ void spinWaterLevelMonitor() {
       drainValveOn(); //Turn on drain valve
       stopMotor();
       spinWaterLevelRequirementMet = 0; //water level requirement is not met
-      Serial.print("draining water\t");
+//      Serial.print("draining water\t");
       //lcd.setCursor(0, 1);
       //lcd.print("draining     ");
     }
@@ -821,7 +948,7 @@ void spinWaterLevelMonitor() {
         drainValveOn();
         spinWaterLevelRequirementMet = 1; //water level requirement is met
         ignoreWaterLevel = 1;
-        Serial.print("drained water\t");
+        serialPrints(); Serial.print("drained water\t");
         //lcd.setCursor(0, 1);
         //lcd.print("drained      ");
       }
@@ -864,7 +991,7 @@ void motorNormalSpin() {
   {
     stopMotor(); //Serial.print("waitForSoakTime = "); Serial.print(waitForSoakTime); Serial.print("\t"); 
     //Serial.print ("Change time= "); //Serial.print(MotorSpinStateChangeTime);  //Serial.print ("\t"); //Serial.print ("Current time= "); //Serial.print( timer); //Serial.print ("\t"); //Serial.print ("Motor stopped"); //Serial.print ("\t");
-    if ( (timer - MotorSpinStateChangeTime) > waitForSoakTime) {
+    if ( soakTimeLeft <= 0) {
       MotorSpinStateChangeTime =  timer; 
       WashNormalSpinState = 1;
       eepromWrite();
@@ -1104,22 +1231,24 @@ void motorDrySpin() {
 //Relay activities
 void cw() {
   digitalWrite(motorDirectionPin, LOW);
-  Serial.print("cw"); Serial.print("\t");
+  //serialPrints() Serial.print("cw"); Serial.print("\n");
 }
 
 void ccw() {
   digitalWrite(motorDirectionPin, HIGH);
-  Serial.print("ccw"); Serial.print("\t");
+  //serialPrints() Serial.print("ccw"); Serial.print("\n");
 }
 
 void stopMotor() {
   digitalWrite(motorOnOffPin, LOW);
-  Serial.print("motor stopped"); Serial.print("\t");
+  if (play == 1){
+  // serialPrints() Serial.print("motor stopped"); Serial.print("\n");
+  }
 }
 
 void startMotor() {
   digitalWrite(motorOnOffPin, HIGH);
-  Serial.print("motor started"); Serial.print("\t");
+   //serialPrints() Serial.print("motor started"); Serial.print("\n");
 }
 
 void drainValveOn() {
@@ -1150,10 +1279,9 @@ void waterValveOff() {
 
 // Modes
 void NormalMode() {
-  Serial.print("N\t");
   WashCycleCount = 3;
-  waitForSoakTime = 62;
-  WashCycleTime =  (waitForSoakTime + 600); //15 min 36
+  waitForSoakTime = 0;
+  WashCycleTime =  (600); //15 min 36
   SpinCycleTime = (180); //5 min
 
 
@@ -1162,7 +1290,7 @@ void NormalMode() {
   {
     if (completedWashCycleCount <= WashCycleCount)
     {
-      Serial.print ("completedWashCycleCount = "); Serial.print (completedWashCycleCount);Serial.print ("\t");
+//      Serial.print ("completedWashCycleCount = "); Serial.print (completedWashCycleCount);Serial.print ("\t");
       if (spinRequest == 0)
       {
         washWaterLevelMonitor();
@@ -1189,7 +1317,7 @@ void NormalMode() {
             }
             if ( washModeTimeLeft <= 0)
             {
-              Serial.print("Wash cycle completed\t");
+              serialPrints(); Serial.print("Wash cycle completed\n");
               stopMotor();
               spinRequest = 1;
               spinModeTimeLeft = 0;
@@ -1202,7 +1330,7 @@ void NormalMode() {
               //start spin cycle
             }
 
-            Serial.print("WashModeTimeLeft="); Serial.print(washModeTimeLeft); Serial.print("\t"); //Serial.print("WashNormalSpinState="); Serial.print(WashNormalSpinState); Serial.print("\t"); 
+//            Serial.print("WashModeTimeLeft="); Serial.print(washModeTimeLeft); Serial.print("\t"); //Serial.print("WashNormalSpinState="); Serial.print(WashNormalSpinState); Serial.print("\t"); 
           }
         }
       }
@@ -1236,6 +1364,10 @@ void NormalMode() {
             {
               stopMotor();
               drainValveOff();
+              delay (9000);
+              pressureSensorCalibrationBottom();
+              delay (1000);
+              {
               //Serial.print("spin cycle completed\t");
               completedWashCycleCount = completedWashCycleCount + 1;
               spinRequest = 0;
@@ -1247,8 +1379,9 @@ void NormalMode() {
               timer = 0;
               eepromWrite();
               //start spin cycle
+              }
             }
-            Serial.print("spinModeTimeLeft="); Serial.print(spinModeTimeLeft); Serial.print("\t");
+//            Serial.print("spinModeTimeLeft="); Serial.print(spinModeTimeLeft); Serial.print("\t");
           }
         }
       }
@@ -1278,10 +1411,9 @@ void NormalMode() {
 }
 
 void HeavyMode() {
-  Serial.print("H\t");
   WashCycleCount = 3;
-  waitForSoakTime = 600;
-  WashCycleTime =  (waitForSoakTime + 720); //15 min 72
+  if (completedWashCycleCount >  0){ waitForSoakTime = 0; }
+  WashCycleTime =  (720); //15 min 72
   SpinCycleTime = (210); //5 min
 
 
@@ -1290,23 +1422,36 @@ void HeavyMode() {
   {
     if (completedWashCycleCount <= WashCycleCount)
     {
-            Serial.print ("completedWashCycleCount = "); Serial.print (completedWashCycleCount);Serial.print ("\t");
+//            Serial.print ("completedWashCycleCount = "); Serial.print (completedWashCycleCount);Serial.print ("\t");
       if (spinRequest == 0)
       {
         washWaterLevelMonitor();
         if (ignoreWaterLevel == 0) {
+          soakTimeLeft = waitForSoakTime;
           stopMotor();
         }
         //
         if (ignoreWaterLevel == 1)
         {
-          if (washModeStarted == 0) {
+          if (washModeStarted == 0 && soakTimeLeft >0)
+          {
+            isSoaking = 1;
+            currentSoakTime= timer; 
+            if (currentSoakTime - previousSoakTime >= 1)
+              {
+                soakTimeLeft = soakTimeLeft - 1;
+                previousSoakTime = currentSoakTime;
+              }
+           }
+          if (washModeStarted == 0 && soakTimeLeft <=0) {
+            isSoaking = 0;
             washModeStartTime =  timer;
             washModeStarted = 1;
             EEPROM.write(10, 1);
             EEPROM.write(11, 0);
           }
           if (washModeStarted == 1) {
+            soakTimeLeft = 0;
             washModeTimeLeft = (WashCycleTime - (timer - washModeStartTime));
             if (washModeTimeLeft > 0)
             {
@@ -1317,7 +1462,7 @@ void HeavyMode() {
             }
             if ( washModeTimeLeft <= 0)
             {
-              Serial.print("Wash cycle completed\t");
+              serialPrints(); Serial.print("Wash cycle completed\n");
               stopMotor();
               spinRequest = 1;
               spinModeTimeLeft = 0;
@@ -1330,7 +1475,7 @@ void HeavyMode() {
               //start spin cycle
             }
 
-            Serial.print("WashModeTimeLeft="); Serial.print(washModeTimeLeft); Serial.print("\t"); // Serial.print("WashNormalSpinState="); Serial.print(WashNormalSpinState); Serial.print("\t");   
+//            Serial.print("WashModeTimeLeft="); Serial.print(washModeTimeLeft); Serial.print("\t"); // Serial.print("WashNormalSpinState="); Serial.print(WashNormalSpinState); Serial.print("\t");   
           }
         }
       }
@@ -1364,6 +1509,10 @@ void HeavyMode() {
             {
               stopMotor();
               drainValveOff();
+              delay (9000);
+              pressureSensorCalibrationBottom();
+              delay (1000);
+              {
               //Serial.print("spin cycle completed\t");
               completedWashCycleCount = completedWashCycleCount + 1;
               spinRequest = 0;
@@ -1374,10 +1523,10 @@ void HeavyMode() {
               timer = 0;
               MotorSpinStateChangeTime=0;
               eepromWrite();
-              
+              }
               //start spin cycle
             }
-            Serial.print("spinModeTimeLeft="); Serial.print(spinModeTimeLeft); Serial.print("\t");
+//            Serial.print("spinModeTimeLeft="); Serial.print(spinModeTimeLeft); Serial.print("\t");
           }
         }
       }
@@ -1406,8 +1555,7 @@ void HeavyMode() {
 }
 
 void DryMode() {
-  Serial.print("D\t");
-  WashCycleCount = 1;
+//  WashCycleCount = 1;
   WashCycleTime = (0); //15 min
   SpinCycleTime = (210); //5 min210
   spinRequest = 1;
@@ -1417,7 +1565,7 @@ void DryMode() {
   {
     if (completedWashCycleCount <= WashCycleCount)
     {
-            Serial.print ("completedWashCycleCount = "); Serial.print (completedWashCycleCount);Serial.print ("\t");
+//            Serial.print ("completedWashCycleCount = "); Serial.print (completedWashCycleCount);Serial.print ("\t");
 
       if (spinRequest == 1)
       {
@@ -1449,6 +1597,10 @@ void DryMode() {
               stopMotor();
               drainValveOff();
               //Serial.print("spin cycle completed\t");
+              delay (9000);
+              pressureSensorCalibrationBottom();
+              delay (1000);
+              {
               completedWashCycleCount = completedWashCycleCount + 1;
               spinRequest = 0;
               ignoreWaterLevel = 0;
@@ -1459,8 +1611,9 @@ void DryMode() {
               timer = 0;
               eepromWrite();
               //start spin cycle
+              }
             }
-            Serial.print("spinModeTimeLeft="); Serial.print(spinModeTimeLeft); Serial.print("\t");
+//            Serial.print("spinModeTimeLeft="); Serial.print(spinModeTimeLeft); Serial.print("\t");
           }
         }
       }
