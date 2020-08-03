@@ -60,7 +60,8 @@ int WashRapidSpinTime = 750; int WashRapidStopTime = 375;
 
 float pSensorMaximum = 0;
 float pSensorMinimum = 0;
-float pressureDifference = 0;
+float pressureDifference = 170;
+float smoothedSensorValueAvg = 0;
 float actualWaterLevel = 0;
 float requiredWaterLevel = 0;
 float WLcurrentTime = 0;
@@ -112,7 +113,8 @@ float eepromValue16 = 0; //pressureDifference
 
 
 void setup() {
-  drySpinState = 0;
+//  EEPROM.write(15, 170);
+  //drySpinState = 0;
   // LCD
   //lcd.begin(16, 2);
   //lcd.setCursor(0, 0);
@@ -154,7 +156,7 @@ void setup() {
   eepromValue13 = EEPROM.read(12); pSensorMinimum = eepromValue13 * 4; //Serial.print("pSensorMinimum="); Serial.print(pSensorMinimum); Serial.print("\n");
   eepromValue14 = EEPROM.read(13); WashNormalSpinState = eepromValue14; //Serial.print("WashNormalSpinState="); Serial.print(WashNormalSpinState); Serial.print("\n");
   eepromValue15 = EEPROM.read(14); soakTimeLeft = eepromValue15*60; //Serial.print("soakTimeLeft="); Serial.print(soakTimeLeft); Serial.print("\n");
-  eepromValue16 = EEPROM.read(15); pressureDifference = eepromValue16*2; //Serial.print("pressureDifference="); Serial.print(pressureDifference); Serial.print("\n");  
+  eepromValue16 = EEPROM.read(15); pressureDifference = eepromValue16; //Serial.print("pressureDifference="); Serial.print(pressureDifference); Serial.print("\n");  
   
 
     {
@@ -189,6 +191,7 @@ void setup() {
 void loop() {
 
   btSerialRead();
+  pressureSensorRead();
 
   serialPrintTimerCurrent = millis();
   if (serialPrintTimerCurrent-serialPrintTimerPrevious>=1000) {serialPrints();   Serial.print ("\n"); serialPrintTimerPrevious=serialPrintTimerCurrent;}
@@ -372,7 +375,13 @@ void serialPrints(){
 //              Serial.print("spinModeTimeLeft="); Serial.print(spinModeTimeLeft); Serial.print("\t");
 
     }
-           
+
+//Serial.print("smoothedSensorValueAvg="); Serial.print(smoothedSensorValueAvg); Serial.print("\t");           
+//Serial.print("actualWaterLevel="); Serial.print(actualWaterLevel); Serial.print("\t");
+//Serial.print("pSensorMinimun="); Serial.print(pSensorMinimum); Serial.print("\t");
+//Serial.print("pSensorMaximum="); Serial.print(pSensorMaximum); Serial.print("\t");
+//Serial.print("pressureDifference="); Serial.print(pressureDifference); Serial.print("\t");
+
 }
 
 
@@ -424,7 +433,7 @@ void eepromWrite() {
   eepromValue13 = EEPROM.read(12); pSensorMinimum = eepromValue13 * 4; //Serial.print("pSensorMinimum="); Serial.print(pSensorMinimum); Serial.print("\n");
   eepromValue14 = EEPROM.read(13); WashNormalSpinState = eepromValue14; //Serial.print("WashNormalSpinState="); Serial.print(WashNormalSpinState); Serial.print("\n");
   eepromValue15 = EEPROM.read(14); soakTimeLeft = eepromValue15*60; //Serial.print("soakTimeLeft="); Serial.print(soakTimeLeft); Serial.print("\n");
-  eepromValue16 = EEPROM.read(15); pressureDifference = eepromValue16*2; //Serial.print("pressureDifference="); Serial.print(pressureDifference); Serial.print("\n");  
+  eepromValue16 = EEPROM.read(15); pressureDifference = eepromValue16; //Serial.print("pressureDifference="); Serial.print(pressureDifference); Serial.print("\n");  
   
   }
 
@@ -589,7 +598,7 @@ void totalTimerFunction() {
 //Selection and display
 void wlSelector() {
      
- buttonValue=analogRead(BUTTON_PIN); 
+ //buttonValue=analogRead(BUTTON_PIN); 
    if (buttonValue>1020)
       {
       Serial.print("W pressed "); Serial.println(buttonValue);
@@ -665,7 +674,7 @@ void wlSelector() {
 
 void mSelector() {
      
- buttonValue=analogRead(BUTTON_PIN); 
+ //buttonValue=analogRead(BUTTON_PIN); 
   if (buttonValue>1000 && buttonValue<1020)
       {
 //       Serial.print("M pressed "); Serial.println(buttonValue);
@@ -726,7 +735,7 @@ void mSelector() {
 }
 
 void ssbPressed() {
-  buttonValue=analogRead(BUTTON_PIN);
+ // buttonValue=analogRead(BUTTON_PIN);
       if (buttonValue>800 && buttonValue<900)
       {
 //        Serial.print("P pressed "); Serial.println(buttonValue);
@@ -820,13 +829,11 @@ void pressureSensorRead() {
 
   float currentSensorValue = analogRead(PRESSURE_SENSOR_PIN);
   pressureSensor.add(currentSensorValue);
-  float smoothedSensorValueAvg = pressureSensor.get();
+  smoothedSensorValueAvg = pressureSensor.get();
   //    //Serial.print(currentSensorValue);
   float lastValueStoredAvg = pressureSensor.getLast();
-  smoothedSensorValueAvg = 1000 - smoothedSensorValueAvg;
-  actualWaterLevel = smoothedSensorValueAvg;
-  pSensorMaximum = (pSensorMinimum + pressureDifference) ;
-  actualWaterLevel = map(actualWaterLevel, pSensorMinimum, pSensorMaximum, 0, 100);
+  pSensorMaximum = (pSensorMinimum - pressureDifference) ;
+  actualWaterLevel = map(smoothedSensorValueAvg, pSensorMinimum , pSensorMaximum, 0, 100);
   //Serial.print("Psr="); //Serial.print(currentSensorValue); //Serial.print("\t=");
   //Serial.print("Pss="); Serial.print(smoothedSensorValueAvg); Serial.print("\t=");
   //    Serial.print("Pssm="); Serial.print(actualWaterLevel); Serial.print("\t");
@@ -847,13 +854,16 @@ void pressureSensorCalibrationBottom() {
 
   float currentSensorValue = analogRead(PRESSURE_SENSOR_PIN);
   pressureSensor.add(currentSensorValue);
-  float smoothedSensorValueAvg = pressureSensor.get();
+  smoothedSensorValueAvg = pressureSensor.get();
   //Serial.print(currentSensorValue);
   float lastValueStoredAvg = pressureSensor.getLast();
-  actualWaterLevel = smoothedSensorValueAvg;
   pSensorMinimum = smoothedSensorValueAvg;
-  serialPrints(); Serial.print("New pSensorMinimum = "); Serial.print(pSensorMinimum); Serial.println("");
+  pSensorMaximum = (pSensorMinimum - pressureDifference) ;
   EEPROM.write(12, pSensorMinimum / 4);
+  eepromValue13 = EEPROM.read(12); pSensorMinimum = eepromValue13 * 4; //Serial.print("pSensorMinimum="); Serial.print(pSensorMinimum); Serial.print("\n");
+  serialPrints(); Serial.print("New pSensorMinimum = "); Serial.print(pSensorMinimum); Serial.println("");
+  
+
   CalibWLtimer = 0;
   CalibWLpreviousTime =0; 
   CalibWLcurrentTime=0;
@@ -877,16 +887,16 @@ void pressureSensorCalibrationTop() {
 
   float currentSensorValue = analogRead(PRESSURE_SENSOR_PIN);
   pressureSensor.add(currentSensorValue);
-  float smoothedSensorValueAvg = pressureSensor.get();
+  smoothedSensorValueAvg = pressureSensor.get();
   //Serial.print(currentSensorValue);
   float lastValueStoredAvg = pressureSensor.getLast();
-  actualWaterLevel = smoothedSensorValueAvg;
   pSensorMaximum = smoothedSensorValueAvg;
-  pressureDifference = pSensorMaximum - pSensorMinimum;
+  eepromValue13 = EEPROM.read(12); pSensorMinimum = eepromValue13 * 4; //Serial.print("pSensorMinimum="); Serial.print(pSensorMinimum); Serial.print("\n"); 
   serialPrints(); Serial.print("New pSensorMaximum = "); Serial.print(pSensorMaximum); Serial.println("");
-  EEPROM.write(15, pressureDifference / 2);
-  eepromValue16 = EEPROM.read(15); pressureDifference = eepromValue16*2; //Serial.print("pressureDifference="); Serial.print(pressureDifference); Serial.print("\n");  
-
+  EEPROM.write(15, pressureDifference);
+  eepromValue16 = EEPROM.read(15); pressureDifference = eepromValue16; //Serial.print("pressureDifference="); Serial.print(pressureDifference); Serial.print("\n");  
+  pSensorMinimum = pSensorMaximum + pressureDifference;
+  
   CalibWLtimer = 0;
   CalibWLpreviousTime =0; 
   CalibWLcurrentTime=0;
@@ -894,6 +904,7 @@ void pressureSensorCalibrationTop() {
   currentActualWaterLevel=0;
   ignoreWaterLevel = 0;
 }
+
 
 void washWaterLevelMonitor() {
   WLcurrentTime = millis();
@@ -959,7 +970,7 @@ void washWaterLevelMonitor() {
       }
      }
      
-      if (CalibWLtimer >= 30)
+      if (CalibWLtimer >= 180)
       {
          pressureSensorCalibrationTop(); 
       }
