@@ -264,23 +264,28 @@ void executeSelection() {
     if (wlSelectorCount == 0)
     {
       swl = 5; digitalWrite(lowWaterLevelLed, LOW); digitalWrite(mediumWaterLevelLed, LOW); digitalWrite(fullWaterLevelLed, LOW);
+
     }
     if (wlSelectorCount == 1)
     {
       swl = 25; digitalWrite(lowWaterLevelLed, HIGH); digitalWrite(mediumWaterLevelLed, LOW); digitalWrite(fullWaterLevelLed, LOW);
+
     }
 
     if (wlSelectorCount == 2)
     {
       swl = 50; digitalWrite(lowWaterLevelLed, LOW); digitalWrite(mediumWaterLevelLed, HIGH); digitalWrite(fullWaterLevelLed, LOW);
+
     }
     if (wlSelectorCount == 3)
     {
       swl = 95; digitalWrite(lowWaterLevelLed, LOW); digitalWrite(mediumWaterLevelLed, LOW); digitalWrite(fullWaterLevelLed, HIGH);
+
     }
     if (wlSelectorCount == 4)
     {
       swl = 75; digitalWrite(lowWaterLevelLed, LOW); digitalWrite(mediumWaterLevelLed, LOW); digitalWrite(fullWaterLevelLed, HIGH);
+
     }
     
     }
@@ -297,9 +302,9 @@ Serial.print("data = " ); Serial.print(data); Serial.print("| \n" );
                
 if(data == 'a') {  interruptedCount = 0; interruptedCount = interruptedCount + 1;}             
 else if(data == 'b') { interruptedCount = 1; interruptedCount = interruptedCount + 1;}  
-else if(data == 'r') { mSelectorCount = 0; resetValues();wlSelectorCount = 3;}  
-else if(data == 'w') { mSelectorCount = 1; resetValues(); wlSelectorCount = 3;}     
-else if(data == 's') { mSelectorCount = 2; resetValues();  wlSelectorCount = 0;}  
+else if(data == 'r') { mSelectorCount = 0; wlSelectorCount = 3; resetValues();}  
+else if(data == 'w') { mSelectorCount = 1;  wlSelectorCount = 3; resetValues();}     
+else if(data == 's') { mSelectorCount = 2;   wlSelectorCount = 0; resetValues();}  
 //else if(data == 'f') { mSelectorCount = 2;}  
 else if(data == 'g') { waitForSoakTime=0;soakTimeLeft = waitForSoakTime;}   
 else if(data == 'h') { waitForSoakTime=120;soakTimeLeft = waitForSoakTime;}  
@@ -336,6 +341,11 @@ void serialPrints(){
     Serial.print("Selected water level="); Serial.print("|");Serial.print(swl); Serial.print("|"); Serial.print("Current water level="); Serial.print("|");Serial.print(actualWaterLevel); Serial.print("|");
     Serial.print("CalibWLtimer = "); Serial.print("|"); Serial.print("0"); Serial.print("|"); 
     Serial.print("Status = Paused"); 
+
+             Serial.print("wlSelectorCount="); Serial.print(wlSelectorCount); Serial.print("\t");
+             Serial.print("swl="); Serial.print(swl); Serial.print("\t"); 
+             Serial.print("requiredWaterLevel="); Serial.print(requiredWaterLevel); Serial.print("\t");
+
     } 
     
   if (play == 1)
@@ -395,11 +405,14 @@ void serialPrints(){
         //    Serial.print("Pssm="); Serial.print(actualWaterLevel); Serial.print("\t");
         
         //WaterLevelMonitor
-//              Serial.print("wlSelectorCount="); Serial.print(wlSelectorCount); Serial.print("\t");
-//              Serial.print("swl="); Serial.print(swl); Serial.print("\t"); 
+
+             Serial.print("wlSelectorCount="); Serial.print(wlSelectorCount); Serial.print("\t");
+             Serial.print("swl="); Serial.print(swl); Serial.print("\t"); 
+             Serial.print("requiredWaterLevel="); Serial.print(requiredWaterLevel); Serial.print("\t");
+
 //              Serial.print("CalibWLtimer="); Serial.print(CalibWLtimer); Serial.print("\t");
-        //    Serial.print("currentActualWaterLevel="); Serial.print(currentActualWaterLevel); Serial.print("\t");
-        //    Serial.print("previousActualWaterLevel="); Serial.print(previousActualWaterLevel); Serial.print("\t");
+//            Serial.print("currentActualWaterLevel="); Serial.print(currentActualWaterLevel); Serial.print("\t");
+//            Serial.print("previousActualWaterLevel="); Serial.print(previousActualWaterLevel); Serial.print("\t");
         
         //Running process
   //            Serial.print("WashModeTimeLeft="); Serial.print(washModeTimeLeft); Serial.print("\t");
@@ -473,8 +486,8 @@ void eepromWrite() {
     EEPROM.write(1, 0);
     EEPROM.write(2, 0);
     EEPROM.write(3, 0);
-    EEPROM.write(4, 0);
-    EEPROM.write(5, 0);
+    EEPROM.write(4, 1);
+    EEPROM.write(5, 3);
     EEPROM.write(6, 0);
     EEPROM.write(7, 0);
     EEPROM.write(8, 0);
@@ -511,6 +524,24 @@ void eepromWrite() {
 
     pressureSensorCalibrationBottom();
     modeAccomplished = 0;
+
+    eepromValue1 = EEPROM.read(0); modeAccomplished = eepromValue1; //Serial.print("modeAccomplished="); Serial.print(modeAccomplished); Serial.print("\n");
+    eepromValue2 = EEPROM.read(1); completedWashCycleCount = eepromValue2; //Serial.print("completedWashCycleCount="); Serial.print(completedWashCycleCount); Serial.print("\n");
+    eepromValue3 = EEPROM.read(2); completedSpinCycleCount = eepromValue3; //Serial.print("completedSpinCycleCount="); Serial.print(completedSpinCycleCount); Serial.print("\n");
+    eepromValue4 = EEPROM.read(3); interruptedCount = eepromValue4; //Serial.print("play interruptedCount="); Serial.print(interruptedCount); Serial.print("\n");
+    eepromValue5 = EEPROM.read(4); mSelectorCount = eepromValue5; //Serial.print("mSelectorCount="); Serial.print(mSelectorCount); Serial.print("\n");
+    eepromValue6 = EEPROM.read(5); wlSelectorCount = eepromValue6; //Serial.print("wlSelectorCount="); Serial.print(wlSelectorCount); Serial.print("\n");
+    eepromValue7 = EEPROM.read(6); spinRequest = eepromValue7; //Serial.print("spinRequest="); Serial.print(spinRequest); Serial.print("\n");
+    eepromValue8 = EEPROM.read(7); timer = eepromValue8 * 60; //Serial.print("timer="); Serial.print(timer); Serial.print("\n");
+    eepromValue9 = EEPROM.read(8); washModeStartTime = eepromValue9 * 60; //Serial.print("washModeStartTime="); Serial.print(washModeStartTime); Serial.print("\n");
+    eepromValue10 = EEPROM.read(9); spinModeStartTime = eepromValue10 * 60; //Serial.print("spinModeStartTime="); Serial.print(spinModeStartTime); Serial.print("\n");
+    eepromValue11 = EEPROM.read(10); washModeStarted = eepromValue11; //Serial.print("washModeStarted="); Serial.print(washModeStarted); Serial.print("\n");
+    eepromValue12 = EEPROM.read(11); spinModeStarted = eepromValue12; //Serial.print("spinModeStarted="); Serial.print(spinModeStarted); Serial.print("\n");
+    eepromValue13 = EEPROM.read(12); pSensorMinimum = eepromValue13 * 4; //Serial.print("pSensorMinimum="); Serial.print(pSensorMinimum); Serial.print("\n");
+    eepromValue14 = EEPROM.read(13); WashNormalSpinState = eepromValue14; //Serial.print("WashNormalSpinState="); Serial.print(WashNormalSpinState); Serial.print("\n");
+    eepromValue15 = EEPROM.read(14); soakTimeLeft = eepromValue15*60; //Serial.print("soakTimeLeft="); Serial.print(soakTimeLeft); Serial.print("\n");
+    eepromValue16 = EEPROM.read(15); pSensorMaximum = eepromValue16 * 4; //Serial.print("pSensorMaximum="); Serial.print(pSensorMaximum); Serial.print("\n");  
+  
   }
 
 }
@@ -1017,7 +1048,6 @@ void spinWaterLevelMonitor() {
   WLcurrentTime = millis();
   CalibWLcurrentTime = millis();
   requiredWaterLevel = 5;
-  swl = requiredWaterLevel;
   pressureSensorRead();
   currentActualWaterLevel = actualWaterLevel;
 //  Serial.print("requiredWaterLevel="); Serial.print(requiredWaterLevel); Serial.print("\t");
