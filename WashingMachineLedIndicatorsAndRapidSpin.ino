@@ -318,9 +318,10 @@ Serial.print("data = " ); Serial.print(data); Serial.print("| \n" );
                
 if(data == 'a') {  interruptedCount = 0; interruptedCount = interruptedCount + 1;}             
 else if(data == 'b') { interruptedCount = 1; interruptedCount = interruptedCount + 1;}  
-else if(data == 'r') { mSelectorCount = 0; wlSelectorCount = 3; resetValues();}  
-else if(data == 'w') { mSelectorCount = 1;  wlSelectorCount = 3; resetValues();}     
-else if(data == 's') { mSelectorCount = 2;   wlSelectorCount = 0; resetValues();}  
+else if(data == 'r') { mSelectorCount = 1; WashCycleCount = 1; wlSelectorCount = 3; resetValues();}  
+else if(data == 'f') { mSelectorCount = 1; WashCycleCount = 2; wlSelectorCount = 3; resetValues();}  
+else if(data == 'w') { mSelectorCount = 1; WashCycleCount = 3; wlSelectorCount = 3; resetValues();}     
+else if(data == 's') { mSelectorCount = 2; WashCycleCount = 1; wlSelectorCount = 0; resetValues();}  
 //else if(data == 'f') { mSelectorCount = 2;}  
 else if(data == 'g') { waitForSoakTime=0;soakTimeLeft = waitForSoakTime;}   
 else if(data == 'h') { waitForSoakTime=120;soakTimeLeft = waitForSoakTime;}  
@@ -348,9 +349,10 @@ void serialPrints(){
     Serial.print("Paused"); Serial.print("|"); Serial.print("Idle"); Serial.print("|");Serial.print(washModeTimeLeft+spinModeTimeLeft+soakTimeLeft); Serial.print("|");
 
         //Mode//
-    if (mSelectorCount == 0) {Serial.print("Selected mode= "); Serial.print("|"); Serial.print("Rinse"); Serial.print("|"); }
-    if (mSelectorCount == 1) {Serial.print("Selected mode= "); Serial.print("|"); Serial.print("Wash"); Serial.print("|");}
-    if (mSelectorCount == 2) {Serial.print("Selected mode= "); Serial.print("|"); Serial.print("Spin"); Serial.print("|");}
+      if ((mSelectorCount == 1)&&(WashCycleCount == 1)) {Serial.print("Selected mode= "); Serial.print("|"); Serial.print("Wash1"); Serial.print("|"); }
+      if ((mSelectorCount == 1)&&(WashCycleCount == 2)) {Serial.print("Selected mode= "); Serial.print("|"); Serial.print("Wash2"); Serial.print("|"); }
+      if ((mSelectorCount == 1)&&(WashCycleCount == 3)) {Serial.print("Selected mode= "); Serial.print("|"); Serial.print("Wash3"); Serial.print("|");}
+      if ((mSelectorCount == 2)&&(WashCycleCount == 1)) {Serial.print("Selected mode= "); Serial.print("|"); Serial.print("Spin"); Serial.print("|");}
       
     Serial.print("Wash count left= "); Serial.print("|");Serial.print(WashCycleCount - completedWashCycleCount); Serial.print("|");
     Serial.print("Selected soak time= "); Serial.print("|");Serial.print(waitForSoakTime); Serial.print("|"); Serial.print("Soak time left= "); Serial.print("|");Serial.print(soakTimeLeft); Serial.print("|");
@@ -381,9 +383,10 @@ void serialPrints(){
       Serial.print(washModeTimeLeft+spinModeTimeLeft+soakTimeLeft); Serial.print("|"); 
       
       //Mode//
-      if (mSelectorCount == 0) {Serial.print("Selected mode= "); Serial.print("|"); Serial.print("Rinse"); Serial.print("|"); }
-      if (mSelectorCount == 1) {Serial.print("Selected mode= "); Serial.print("|"); Serial.print("Wash"); Serial.print("|");}
-      if (mSelectorCount == 2) {Serial.print("Selected mode= "); Serial.print("|"); Serial.print("Spin"); Serial.print("|");}
+      if ((mSelectorCount == 1)&&(WashCycleCount == 1)) {Serial.print("Selected mode= "); Serial.print("|"); Serial.print("Wash1"); Serial.print("|"); }
+      if ((mSelectorCount == 1)&&(WashCycleCount == 2)) {Serial.print("Selected mode= "); Serial.print("|"); Serial.print("Wash2"); Serial.print("|"); }
+      if ((mSelectorCount == 1)&&(WashCycleCount == 3)) {Serial.print("Selected mode= "); Serial.print("|"); Serial.print("Wash3"); Serial.print("|");}
+      if ((mSelectorCount == 2)&&(WashCycleCount == 1)) {Serial.print("Selected mode= "); Serial.print("|"); Serial.print("Spin"); Serial.print("|");}
       
       //Wash count left//
       Serial.print("Cycles left= "); Serial.print("|"); Serial.print(WashCycleCount - completedWashCycleCount); Serial.print("|");
@@ -1053,8 +1056,10 @@ void washWaterLevelMonitor() {
       }
      }
      
-      if (CalibWLtimer >= 180)
+      if (CalibWLtimer >= 60)
       {
+        washWaterLevelRequirementMet = 1; //water level requirement is met
+        ignoreWaterLevel = 1;
          //pressureSensorCalibrationTop(); 
       }
 
@@ -1131,7 +1136,9 @@ void spinWaterLevelMonitor() {
      
       if (CalibWLtimer >= 60)
       {
-         pressureSensorCalibrationBottom(); 
+        spinWaterLevelRequirementMet = 1; //water level requirement is met
+        ignoreWaterLevel = 1;
+        pressureSensorCalibrationBottom(); 
       }      
       
     }
@@ -1474,7 +1481,7 @@ void waterValveOff() {
 
 // Modes
 void NormalMode() {
-  WashCycleCount = 3;
+//  WashCycleCount = 3;
   waitForSoakTime = 0;
   WashCycleTime =  (600); //15 min 36
   SpinCycleTime = (180); //5 min
@@ -1606,7 +1613,7 @@ void NormalMode() {
 }
 
 void HeavyMode() {
-  WashCycleCount = 3;
+//  WashCycleCount = 3;
   if (completedWashCycleCount >  0){ waitForSoakTime = 0; }
   WashCycleTime =  (720); //15 min 72
   SpinCycleTime = (210); //5 min
@@ -1774,7 +1781,7 @@ void HeavyMode() {
 }
 
 void DryMode() {
-  WashCycleCount = 1;
+//  WashCycleCount = 1;
   WashCycleTime = (0); //15 min
   SpinCycleTime = (210); //5 min210
   spinRequest = 1;
